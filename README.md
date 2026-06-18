@@ -29,6 +29,9 @@ cargo run --release --example circle       # 2D circle classification
 # Function approximation (regression)
 cargo run --release --example sine         # Learn y = sin(x) from 50 samples
 
+# Interactive network visualizer (GUI)
+cargo run --release --example visualize   # Opens window with trained XOR network, sidebar layer controls
+
 Run all unit tests:
 
 ```bash
@@ -46,33 +49,29 @@ cargo test
 | `parity3` | `[3, 16, 1]` | ★★★★ | Parity generalizes XOR to 3 bits — many local minima |
 | `circle` | `[2, 16, 1]` | ★★★★ | Continuous inputs, curved boundary — tests generalization |
 | `sine` | `[1, 16, 1]` | ★★★★★ | Function approximation — learn a smooth non-monotonic curve |
-
-## Project Structure
-
 ```
 src/                          examples/
 ├── main.rs                   ├── and.rs
 ├── lib.rs                    ├── or.rs
 ├── activation_functions.rs   ├── xor.rs
 ├── data.rs                   ├── half_adder.rs
-├── eval.rs                   └── circle.rs
-├── neural.rs
-├── neural_layer.rs
-├── neural_net.rs
-└── train.rs
+├── eval.rs                   ├── full_adder.rs
+├── neural.rs                 ├── parity3.rs
+├── neural_layer.rs           ├── circle.rs
+├── neural_net.rs             ├── sine.rs
+├── train.rs                  └── visualize.rs
+└── visualize.rs
 ```
 
 ### Module responsibilities
-
-| Module | Exports | Role |
-|---|---|---|
 | `activation_functions` | `sigmoid`, `sigmoid_derivative` | Non-linear activation and its derivative |
-| `data` | `Sample`, `xor`, `and`, `or`, `half_adder`, `circle` | Training datasets — swap or add your own |
+| `data` | `Sample`, `xor`, `and`, `or`, `half_adder`, `circle`, `full_adder`, `parity3`, `sine` | Training datasets — swap or add your own |
 | `neural` | `Neuron`, `xavier_init` | Single neuron: weighted sum, activation, output |
 | `neural_layer` | `Layer` | Neuron collection: layer-level forward pass, weight adjustment |
 | `neural_net` | `NeuralNetwork` | Network topology, forward/backward propagation, training helpers |
 | `train` | `until_mse` | Training loop with convergence check and logging |
 | `eval` | `inference`, `parameters` | Run predictions, inspect learned weights |
+| `visualize` | `visualize` | Interactive graph window with sidebar layer controls |
 | `main` | — | Lists available examples |
 
 ## How It Works
@@ -189,7 +188,10 @@ let net: NeuralNetwork = serde_json::from_str(&json).unwrap();
 | Crate | Version | Why |
 |---|---|---|
 | `rand` | 0.9 | Xavier weight initialization |
-| `serde` | 1 (with `derive`) | Optional serialization |
+| `serde` | 1 (with `derive`) | Serialization |
+| `eframe` / `egui` | 0.34 | GUI framework for interactive visualization |
+| `egui_graphs` | 0.30 | Graph widget for network diagram (layered, zoom/pan) |
+| `petgraph` | 0.8 | Graph data structure backing the visualizer |
 
 ## See Also
 

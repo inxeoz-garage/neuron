@@ -507,6 +507,8 @@ flowchart LR
 | Inference + parameter inspection | `eval.rs` — `inference()`, `parameters()` |
 | Sample datasets | `data.rs` — `xor()`, `Sample` type |
 | Binary entry point | `main.rs` |
+| Interactive network visualizer | `visualize.rs` — `visualize()` builds an egui graph, supports layer visibility/solo controls |
+
 
 If the code were deleted, you could reconstruct it entirely from the reasoning chain above.
 

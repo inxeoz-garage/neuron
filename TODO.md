@@ -38,7 +38,8 @@ Ideas for extending the project, roughly ordered from small/mechanical to ambiti
 
 ## Documentation & Pedagogy
 
-- [ ] **Interactive visualisation** — ASCII or gnuplot output of decision boundary for 2-input examples (and, xor, circle). Plot the sine approximation.
+- [x] **Interactive visualisation** — egui_graphs network diagram with sidebar layer controls (zoom/pan/drag, focus solo).
+- [ ] **Layer-wise focus enhancements** — Highlight forward/backward pass paths through the graph; animate activation flow.
 - [ ] **Backpropagation deep-dive** — Expand neuron.md with worked example: forward → MSE → gradient → update, step by step.
 - [ ] **Exercise suggestions** — Add EXERCISES.md with prompts for students (e.g. "change the circle topology to [2,32,1] and compare", "add ReLU in the hidden layer").
 - [ ] **Implementation in other languages** — Side-by-side comparison with Python/numpy version of the same architecture.
