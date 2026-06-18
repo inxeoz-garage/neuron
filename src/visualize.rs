@@ -1,10 +1,42 @@
 use crate::NeuralNetwork;
 use eframe::egui::{self, Color32};
 use egui_graphs::{
-    DefaultEdgeShape, DefaultGraphView, DefaultNodeShape, Graph as EguiGraph, SettingsNavigation,
+    DefaultEdgeShape, DefaultNodeShape, Graph as EguiGraph, GraphView, Layout, LayoutState, SettingsNavigation,
     SettingsStyle,
 };
 use petgraph::stable_graph::NodeIndex;
+
+// ── No-op layout: never moves nodes (we set positions manually) ────
+
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
+ struct FixedState;
+impl LayoutState for FixedState {}
+#[derive(Default)]
+ struct FixedLayout;
+impl Layout<FixedState> for FixedLayout {
+    fn next<N, E, Ty, Ix, Dn, De>(
+        &mut self,
+        _g: &mut EguiGraph<N, E, Ty, Ix, Dn, De>,
+        _ui: &egui::Ui,
+    ) where
+        N: Clone,
+        E: Clone,
+        Ty: petgraph::EdgeType,
+        Ix: petgraph::graph::IndexType,
+        Dn: egui_graphs::DisplayNode<N, E, Ty, Ix>,
+        De: egui_graphs::DisplayEdge<N, E, Ty, Ix, Dn>,
+    {
+    }
+
+    fn state(&self) -> FixedState {
+        FixedState
+    }
+    fn from_state(_state: FixedState) -> impl Layout<FixedState> {
+        FixedLayout
+    }
+}
+
+// ── Types ─────────────────────────────────────────────────────────
 
 type NetGraph = EguiGraph<
     (),
@@ -15,28 +47,37 @@ type NetGraph = EguiGraph<
     DefaultEdgeShape,
 >;
 
-/// Metadata about one layer in the visualized graph.
+type GraphViewWidget<'a> = GraphView<
+    'a,
+    (),
+    (),
+    petgraph::Directed,
+    petgraph::stable_graph::DefaultIx,
+    DefaultNodeShape,
+    DefaultEdgeShape,
+    FixedState,
+    FixedLayout,
+>;
+
 struct LayerMeta {
-    /// Display name shown in sidebar (e.g. "Input Layer", "Layer 1", "Output")
     name: String,
-    /// Node indices belonging to this layer (in the egui_graph).
     nodes: Vec<NodeIndex>,
-    /// Whether this layer is currently visible (toggle in sidebar).
     visible: bool,
 }
 
-// ── Full colours (visible + not focused) ──────────────────────────
+// ── Colours ───────────────────────────────────────────────────────
+
 const COLOR_INPUT: Color32 = Color32::from_rgb(70, 130, 220);
 const COLOR_HIDDEN: Color32 = Color32::from_rgb(220, 180, 70);
 const COLOR_OUTPUT: Color32 = Color32::from_rgb(70, 200, 120);
 
-// ── Dimmed colours (visible AND another layer is solo'd) ──────────
 const DIM_INPUT: Color32 = Color32::from_rgb(30, 60, 110);
 const DIM_HIDDEN: Color32 = Color32::from_rgb(110, 90, 35);
 const DIM_OUTPUT: Color32 = Color32::from_rgb(35, 100, 60);
 
-// ── Hidden colour (checkbox unchecked) ────────────────────────────
 const HIDDEN: Color32 = Color32::from_rgb(20, 20, 20);
+
+// ── Graph builder ─────────────────────────────────────────────────
 
 fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
     let mut g = NetGraph::new(Default::default());
@@ -48,7 +89,7 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
 
     let mut layers: Vec<LayerMeta> = Vec::new();
 
-    // ── Input layer ────────────────────────────────────────────────
+    // Input layer
     {
         let mut nodes = Vec::with_capacity(n_inputs);
         let y_start = -(n_inputs as f32 - 1.0) * y_spacing / 2.0;
@@ -59,7 +100,10 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
                 format!("Input[{i}]"),
                 egui::Pos2::new(x_input, y),
             );
-            g.g_mut().node_weight_mut(idx).unwrap().set_color(COLOR_INPUT);
+            g.g_mut()
+                .node_weight_mut(idx)
+                .unwrap()
+                .set_color(COLOR_INPUT);
             nodes.push(idx);
         }
         layers.push(LayerMeta {
@@ -69,14 +113,13 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
         });
     }
 
-    // ── Hidden & output layers ────────────────────────────────────
+    // Hidden & output layers
     for (layer_idx, layer) in net.layers.iter().enumerate() {
         let x = x_input + (layer_idx as f32 + 1.0) * x_spacing;
         let n = layer.neurons.len();
         let mut nodes = Vec::with_capacity(n);
         let y_start = -(n as f32 - 1.0) * y_spacing / 2.0;
         let is_last = layer_idx == net.layers.len() - 1;
-
         let (base_color, prefix): (Color32, String) = if is_last {
             (COLOR_OUTPUT, "Output".into())
         } else {
@@ -87,7 +130,10 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
             let y = y_start + neuron_idx as f32 * y_spacing;
             let label = format!("{}[{}]  b={:.3}", prefix, neuron_idx, neuron.bias);
             let idx = g.add_node_with_label_and_location((), label, egui::Pos2::new(x, y));
-            g.g_mut().node_weight_mut(idx).unwrap().set_color(base_color);
+            g.g_mut()
+                .node_weight_mut(idx)
+                .unwrap()
+                .set_color(base_color);
             nodes.push(idx);
         }
         layers.push(LayerMeta {
@@ -101,11 +147,11 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
         });
     }
 
-    // ── Edges: connect each layer to the next ─────────────────────
+    // Edges — connect each layer to the next
     for i in 0..layers.len() - 1 {
         let src = &layers[i];
         let dst = &layers[i + 1];
-        let dst_layer = &net.layers[i]; // weights on the receiving layer
+        let dst_layer = &net.layers[i];
 
         for (dst_i, &dst_idx) in dst.nodes.iter().enumerate() {
             let neuron = &dst_layer.neurons[dst_i];
@@ -119,34 +165,25 @@ fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
     (g, layers)
 }
 
-/// Apply visibility / solo state to every node's colour.
-fn apply_visibility(
-    g: &mut NetGraph,
-    layers: &[LayerMeta],
-    solo_layer: Option<usize>,
-) {
-    for (li, meta) in layers.iter().enumerate() {
-        let is_solo_target = Some(li) == solo_layer;
-        let visible = meta.visible;
+// ── Colour apply ──────────────────────────────────────────────────
 
-        let color = if !visible {
+fn apply_visibility(g: &mut NetGraph, layers: &[LayerMeta], solo_layer: Option<usize>) {
+    for (li, meta) in layers.iter().enumerate() {
+        let color = if !meta.visible {
             HIDDEN
-        } else if is_solo_target || solo_layer.is_none() {
-            // full colour
+        } else if solo_layer.is_none() || Some(li) == solo_layer {
             match li {
                 0 => COLOR_INPUT,
                 l if l == layers.len() - 1 => COLOR_OUTPUT,
                 _ => COLOR_HIDDEN,
             }
         } else {
-            // dimmed -- another layer is solo'd
             match li {
                 0 => DIM_INPUT,
                 l if l == layers.len() - 1 => DIM_OUTPUT,
                 _ => DIM_HIDDEN,
             }
         };
-
         for &n in &meta.nodes {
             if let Some(node) = g.g_mut().node_weight_mut(n) {
                 node.set_color(color);
@@ -155,10 +192,13 @@ fn apply_visibility(
     }
 }
 
+// ── Public API ────────────────────────────────────────────────────
+
 /// Open an interactive window visualizing the network's architecture and weights.
 ///
 /// A sidebar on the left lets you toggle layer visibility and "solo" one layer
 /// (dimming all others). Nodes are laid out horizontally: input → layers → output.
+/// You can zoom and pan the graph freely.
 ///
 /// Blocks until the window is closed.
 pub fn visualize(net: &NeuralNetwork) -> Result<(), eframe::Error> {
@@ -181,15 +221,17 @@ pub fn visualize(net: &NeuralNetwork) -> Result<(), eframe::Error> {
     )
 }
 
+// ── App ───────────────────────────────────────────────────────────
+
 struct VisualizerApp {
     g: NetGraph,
     layers: Vec<LayerMeta>,
-    /// When `Some(i)`, layer `i` is singled out and everything else is dimmed.
     solo_layer: Option<usize>,
 }
 
 impl eframe::App for VisualizerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // ── Sidebar ────────────────────────────────────────────────
         let mut changed = false;
         egui::Panel::left("layer_control")
             .resizable(true)
@@ -217,7 +259,6 @@ impl eframe::App for VisualizerApp {
                         });
                     }
                 });
-
                 ui.separator();
                 if ui.button("Reset all").clicked() {
                     for meta in &mut self.layers {
@@ -232,9 +273,9 @@ impl eframe::App for VisualizerApp {
             apply_visibility(&mut self.g, &self.layers, self.solo_layer);
         }
 
-        // ── Graph ──────────────────────────────────────────────────
+        // ── Graph (no-op layout preserves manual positions) ─────────
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            let mut view = DefaultGraphView::new(&mut self.g)
+            let mut view = GraphViewWidget::new(&mut self.g)
                 .with_navigations(
                     &SettingsNavigation::new()
                         .with_zoom_and_pan_enabled(true)
