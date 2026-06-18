@@ -1,9 +1,10 @@
 use crate::NeuralNetwork;
-use eframe::egui::Color32;
+use eframe::egui::{self, Color32};
 use egui_graphs::{
     DefaultEdgeShape, DefaultGraphView, DefaultNodeShape, Graph as EguiGraph, SettingsNavigation,
     SettingsStyle,
 };
+use petgraph::stable_graph::NodeIndex;
 
 type NetGraph = EguiGraph<
     (),
@@ -14,113 +15,225 @@ type NetGraph = EguiGraph<
     DefaultEdgeShape,
 >;
 
-fn build_graph(net: &NeuralNetwork) -> NetGraph {
+/// Metadata about one layer in the visualized graph.
+struct LayerMeta {
+    /// Display name shown in sidebar (e.g. "Input Layer", "Layer 1", "Output")
+    name: String,
+    /// Node indices belonging to this layer (in the egui_graph).
+    nodes: Vec<NodeIndex>,
+    /// Whether this layer is currently visible (toggle in sidebar).
+    visible: bool,
+}
+
+// ── Full colours (visible + not focused) ──────────────────────────
+const COLOR_INPUT: Color32 = Color32::from_rgb(70, 130, 220);
+const COLOR_HIDDEN: Color32 = Color32::from_rgb(220, 180, 70);
+const COLOR_OUTPUT: Color32 = Color32::from_rgb(70, 200, 120);
+
+// ── Dimmed colours (visible AND another layer is solo'd) ──────────
+const DIM_INPUT: Color32 = Color32::from_rgb(30, 60, 110);
+const DIM_HIDDEN: Color32 = Color32::from_rgb(110, 90, 35);
+const DIM_OUTPUT: Color32 = Color32::from_rgb(35, 100, 60);
+
+// ── Hidden colour (checkbox unchecked) ────────────────────────────
+const HIDDEN: Color32 = Color32::from_rgb(20, 20, 20);
+
+fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
     let mut g = NetGraph::new(Default::default());
+    let n_inputs = net.layers[0].neurons[0].input.len();
 
     let x_input = 0.0_f32;
     let x_spacing = 300.0_f32;
     let y_spacing = 80.0_f32;
 
-    // Track nodes per layer for layout
-    let mut layer_positions: Vec<Vec<petgraph::stable_graph::NodeIndex>> = Vec::new();
+    let mut layers: Vec<LayerMeta> = Vec::new();
 
-    // Input layer: create one node per input feature
-    let n_inputs = net.layers[0].neurons[0].input.len();
-    let mut input_nodes = Vec::with_capacity(n_inputs);
-    let y_start_in = -(n_inputs as f32 - 1.0) * y_spacing / 2.0;
-    for i in 0..n_inputs {
-        let y = y_start_in + i as f32 * y_spacing;
-        let idx = g.add_node_with_label_and_location(
-            (),
-            format!("x{i}"),
-            eframe::egui::Pos2::new(x_input, y),
-        );
-        g.g_mut()
-            .node_weight_mut(idx)
-            .unwrap()
-            .set_color(Color32::from_rgb(70, 130, 220));
-        input_nodes.push(idx);
+    // ── Input layer ────────────────────────────────────────────────
+    {
+        let mut nodes = Vec::with_capacity(n_inputs);
+        let y_start = -(n_inputs as f32 - 1.0) * y_spacing / 2.0;
+        for i in 0..n_inputs {
+            let y = y_start + i as f32 * y_spacing;
+            let idx = g.add_node_with_label_and_location(
+                (),
+                format!("Input[{i}]"),
+                egui::Pos2::new(x_input, y),
+            );
+            g.g_mut().node_weight_mut(idx).unwrap().set_color(COLOR_INPUT);
+            nodes.push(idx);
+        }
+        layers.push(LayerMeta {
+            name: format!("Input Layer ({n_inputs})"),
+            nodes,
+            visible: true,
+        });
     }
-    layer_positions.push(input_nodes);
 
-    // Hidden and output layers
+    // ── Hidden & output layers ────────────────────────────────────
     for (layer_idx, layer) in net.layers.iter().enumerate() {
         let x = x_input + (layer_idx as f32 + 1.0) * x_spacing;
-        let n_neurons = layer.neurons.len();
-        let mut layer_nodes = Vec::with_capacity(n_neurons);
-        let y_start = -(n_neurons as f32 - 1.0) * y_spacing / 2.0;
+        let n = layer.neurons.len();
+        let mut nodes = Vec::with_capacity(n);
+        let y_start = -(n as f32 - 1.0) * y_spacing / 2.0;
+        let is_last = layer_idx == net.layers.len() - 1;
+
+        let (base_color, prefix): (Color32, String) = if is_last {
+            (COLOR_OUTPUT, "Output".into())
+        } else {
+            (COLOR_HIDDEN, format!("Layer {}", layer_idx + 1))
+        };
 
         for (neuron_idx, neuron) in layer.neurons.iter().enumerate() {
             let y = y_start + neuron_idx as f32 * y_spacing;
-
-            // Determine node label and color by layer
-            let (label, color) = if layer_idx == net.layers.len() - 1 {
-                // Output layer
-                (
-                    format!("out  b={:.3}", neuron.bias),
-                    Color32::from_rgb(70, 200, 120),
-                )
-            } else {
-                // Hidden layer
-                (
-                    format!("h{}  b={:.3}", neuron_idx, neuron.bias),
-                    Color32::from_rgb(220, 180, 70),
-                )
-            };
-
-            let idx = g.add_node_with_label_and_location(
-                (),
-                label,
-                eframe::egui::Pos2::new(x, y),
-            );
-            g.g_mut().node_weight_mut(idx).unwrap().set_color(color);
-            layer_nodes.push(idx);
+            let label = format!("{}[{}]  b={:.3}", prefix, neuron_idx, neuron.bias);
+            let idx = g.add_node_with_label_and_location((), label, egui::Pos2::new(x, y));
+            g.g_mut().node_weight_mut(idx).unwrap().set_color(base_color);
+            nodes.push(idx);
         }
-        layer_positions.push(layer_nodes);
+        layers.push(LayerMeta {
+            name: if is_last {
+                format!("Output Layer ({n})")
+            } else {
+                format!("Layer {} ({n})", layer_idx + 1)
+            },
+            nodes,
+            visible: true,
+        });
     }
 
-    // Connect each layer to the next
-    for src_layer_idx in 0..layer_positions.len() - 1 {
-        let src_nodes = &layer_positions[src_layer_idx];
-        let dst_nodes = &layer_positions[src_layer_idx + 1];
-        let dst_layer = &net.layers[src_layer_idx]; // weights live on the receiving layer
+    // ── Edges: connect each layer to the next ─────────────────────
+    for i in 0..layers.len() - 1 {
+        let src = &layers[i];
+        let dst = &layers[i + 1];
+        let dst_layer = &net.layers[i]; // weights on the receiving layer
 
-        for (dst_i, &dst_idx) in dst_nodes.iter().enumerate() {
+        for (dst_i, &dst_idx) in dst.nodes.iter().enumerate() {
             let neuron = &dst_layer.neurons[dst_i];
-            for (src_i, &src_idx) in src_nodes.iter().enumerate() {
+            for (src_i, &src_idx) in src.nodes.iter().enumerate() {
                 let w = neuron.weights[src_i];
-                let label = format!("{:.3}", w);
-                let _ = g.add_edge_with_label(src_idx, dst_idx, (), label);
+                let _ = g.add_edge_with_label(src_idx, dst_idx, (), format!("{:.3}", w));
             }
         }
     }
 
-    g
+    (g, layers)
+}
+
+/// Apply visibility / solo state to every node's colour.
+fn apply_visibility(
+    g: &mut NetGraph,
+    layers: &[LayerMeta],
+    solo_layer: Option<usize>,
+) {
+    for (li, meta) in layers.iter().enumerate() {
+        let is_solo_target = Some(li) == solo_layer;
+        let visible = meta.visible;
+
+        let color = if !visible {
+            HIDDEN
+        } else if is_solo_target || solo_layer.is_none() {
+            // full colour
+            match li {
+                0 => COLOR_INPUT,
+                l if l == layers.len() - 1 => COLOR_OUTPUT,
+                _ => COLOR_HIDDEN,
+            }
+        } else {
+            // dimmed -- another layer is solo'd
+            match li {
+                0 => DIM_INPUT,
+                l if l == layers.len() - 1 => DIM_OUTPUT,
+                _ => DIM_HIDDEN,
+            }
+        };
+
+        for &n in &meta.nodes {
+            if let Some(node) = g.g_mut().node_weight_mut(n) {
+                node.set_color(color);
+            }
+        }
+    }
 }
 
 /// Open an interactive window visualizing the network's architecture and weights.
 ///
-/// The graph shows each neuron as a node (coloured by layer) and each weight as
-/// a labelled directed edge. You can zoom, pan, and drag nodes.
+/// A sidebar on the left lets you toggle layer visibility and "solo" one layer
+/// (dimming all others). Nodes are laid out horizontally: input → layers → output.
 ///
 /// Blocks until the window is closed.
 pub fn visualize(net: &NeuralNetwork) -> Result<(), eframe::Error> {
-    let g = build_graph(net);
+    let (g, layers) = build_graph_and_meta(net);
 
     eframe::run_native(
         "Neuron — Network Visualizer",
-        eframe::NativeOptions::default(),
-        Box::new(|_cc| Ok(Box::new(VisualizerApp { g }))),
+        eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size(egui::vec2(1280.0, 720.0)),
+            ..Default::default()
+        },
+        Box::new(|_cc| {
+            Ok(Box::new(VisualizerApp {
+                g,
+                layers,
+                solo_layer: None,
+            }))
+        }),
     )
 }
 
 struct VisualizerApp {
     g: NetGraph,
+    layers: Vec<LayerMeta>,
+    /// When `Some(i)`, layer `i` is singled out and everything else is dimmed.
+    solo_layer: Option<usize>,
 }
 
 impl eframe::App for VisualizerApp {
-    fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
-        eframe::egui::CentralPanel::default().show_inside(ui, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let mut changed = false;
+        egui::Panel::left("layer_control")
+            .resizable(true)
+            .default_size(220.0)
+            .show_inside(ui, |ui| {
+                ui.heading("Layers");
+                ui.separator();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for i in 0..self.layers.len() {
+                        let is_solo = self.solo_layer == Some(i);
+                        ui.horizontal(|ui| {
+                            let mut vis = self.layers[i].visible;
+                            if ui.checkbox(&mut vis, &self.layers[i].name).changed() {
+                                self.layers[i].visible = vis;
+                                changed = true;
+                            }
+                            if ui
+                                .selectable_label(is_solo, if is_solo { "⊕" } else { "⊙" })
+                                .on_hover_text("Isolate this layer")
+                                .clicked()
+                            {
+                                self.solo_layer = if is_solo { None } else { Some(i) };
+                                changed = true;
+                            }
+                        });
+                    }
+                });
+
+                ui.separator();
+                if ui.button("Reset all").clicked() {
+                    for meta in &mut self.layers {
+                        meta.visible = true;
+                    }
+                    self.solo_layer = None;
+                    changed = true;
+                }
+            });
+
+        if changed {
+            apply_visibility(&mut self.g, &self.layers, self.solo_layer);
+        }
+
+        // ── Graph ──────────────────────────────────────────────────
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             let mut view = DefaultGraphView::new(&mut self.g)
                 .with_navigations(
                     &SettingsNavigation::new()
