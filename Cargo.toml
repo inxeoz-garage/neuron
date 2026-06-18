@@ -5,4 +5,7 @@ edition = "2024"
 
 [dependencies]
 rand = "0.9"
+eframe = "0.34"
+egui_graphs = "0.30"
+petgraph = "0.8"
 serde = { version = "1", features = ["derive"] }
