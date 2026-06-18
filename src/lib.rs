@@ -5,3 +5,5 @@ pub mod neural;
 pub mod neural_layer;
 pub mod neural_net;
 pub mod train;
+
+pub use neural_net::NeuralNetwork;

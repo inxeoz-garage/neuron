@@ -14,7 +14,7 @@ pub fn inference(net: &mut NeuralNetwork, data: &[Sample]) {
             if i > 0 {
                 print!(", ");
             }
-            print!("{val:.0}");
+            print!("{val:.2}");
         }
         print!("] →");
         for o in &outputs {

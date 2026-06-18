@@ -1,15 +1,27 @@
-use neuron::data;
-use neuron::neural_net::NeuralNetwork;
+use std::env;
 
 fn main() {
-    let mut net = NeuralNetwork::new(&[2, 4, 1]);
-    let data = data::xor();
-    let lr = 0.7;
+    let args: Vec<String> = env::args().collect();
 
-    let epochs = neuron::train::until_mse(&mut net, &data, lr, 0.001);
-    println!("\nTrained in {epochs} epochs\n");
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "and" | "or" | "xor" | "half_adder" | "circle" => {
+                println!("Run: cargo run --example {}", args[1]);
+                return;
+            }
+            _ => {}
+        }
+    }
 
-    neuron::eval::inference(&mut net, &data);
-    println!("\nLearned parameters:");
-    neuron::eval::parameters(&net);
+    println!("Neuron — Neural Network from Scratch");
+    println!();
+    println!("Available examples (run individually):");
+    println!("  cargo run --example and        — AND gate");
+    println!("  cargo run --example or         — OR gate");
+    println!("  cargo run --example xor        — XOR (needs hidden layer)");
+    println!("  cargo run --example half_adder — Half-adder (multi-output)");
+    println!("  cargo run --example circle     — Circle classifier (continuous)");
+    println!();
+    println!("Or run all tests:");
+    println!("  cargo test");
 }

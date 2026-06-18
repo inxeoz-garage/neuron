@@ -6,6 +6,10 @@ use crate::neural_net::NeuralNetwork;
 /// Prints progress every 1000 epochs (every epoch for the first 5).
 /// Returns the total number of epochs trained.
 ///
+/// If `max_epochs` is `Some(n)`, training stops after `n` epochs even
+/// if the target was not reached. This prevents runaway training on
+/// harder problems (like the circle dataset).
+///
 /// This is a *full-batch* trainer: each epoch processes every sample
 /// exactly once. For larger datasets you would switch to mini-batch
 /// or stochastic gradient descent, which update weights more frequently
@@ -15,6 +19,7 @@ pub fn until_mse(
     data: &[Sample],
     learning_rate: f64,
     target_mse: f64,
+    max_epochs: Option<usize>,
 ) -> usize {
     let mut epoch = 0usize;
     loop {
@@ -24,6 +29,12 @@ pub fn until_mse(
         }
         if mse < target_mse {
             return epoch;
+        }
+        if let Some(max) = max_epochs {
+            if epoch >= max {
+                println!("  ⏱ Reached max epochs ({max}), target MSE {target_mse} not reached");
+                return epoch;
+            }
         }
         net.train_epoch(data, learning_rate);
         epoch += 1;
