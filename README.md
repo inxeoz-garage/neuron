@@ -16,12 +16,18 @@ cargo run --release --example or           # OR gate
 # Needs a hidden layer (not linearly separable)
 cargo run --release --example xor          # XOR — the classic test
 
+# Harder boolean: 3 inputs, multi-output, compositional
+cargo run --release --example full_adder   # Full adder: 3 inputs → (sum, carry)
+cargo run --release --example parity3      # 3-bit parity — hard, may need multiple tries
+
 # Multi-output: two output neurons at once
 cargo run --release --example half_adder   # (sum, carry)
 
 # Continuous inputs, non-linear decision boundary
 cargo run --release --example circle       # 2D circle classification
-```
+
+# Function approximation (regression)
+cargo run --release --example sine         # Learn y = sin(x) from 50 samples
 
 Run all unit tests:
 
@@ -30,14 +36,16 @@ cargo test
 ```
 
 ## Example Progression
-
 | Example | Topology | Difficulty | What it teaches |
 |---|---|---|---|
 | `and` | `[2, 1]` | ★ | Single neuron can learn linearly separable problems |
 | `or` | `[2, 1]` | ★ | Same — contrasts with XOR |
 | `xor` | `[2, 4, 1]` | ★★ | Hidden layer needed for non-linearly-separable problems |
 | `half_adder` | `[2, 4, 2]` | ★★★ | Multi-output: one network solving two problems at once |
+| `full_adder` | `[3, 8, 2]` | ★★★ | Three inputs, compositional (built from half-adder + extra gate) |
+| `parity3` | `[3, 16, 1]` | ★★★★ | Parity generalizes XOR to 3 bits — many local minima |
 | `circle` | `[2, 16, 1]` | ★★★★ | Continuous inputs, curved boundary — tests generalization |
+| `sine` | `[1, 16, 1]` | ★★★★★ | Function approximation — learn a smooth non-monotonic curve |
 
 ## Project Structure
 

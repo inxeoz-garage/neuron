@@ -120,3 +120,74 @@ pub fn circle() -> Vec<Sample> {
     }
     samples
 }
+// ── More complex boolean ─────────────────────────────────────────
+
+/// Full adder: adds three bits (a, b, carry_in) → (sum, carry_out).
+///
+/// ```text
+/// sum       = a XOR b XOR carry_in   (odd number of 1s)
+/// carry_out = (a AND b) OR (carry_in AND (a XOR b))
+/// ```
+///
+/// This extends the half-adder with a carry input, making it 8 rows
+/// with 3 inputs and 2 outputs. The network must learn both XOR and
+/// AND/OR relationships simultaneously — a harder compositional task.
+pub fn full_adder() -> Vec<Sample> {
+    vec![
+        (vec![0.0, 0.0, 0.0], vec![0.0, 0.0]),
+        (vec![0.0, 0.0, 1.0], vec![1.0, 0.0]),
+        (vec![0.0, 1.0, 0.0], vec![1.0, 0.0]),
+        (vec![0.0, 1.0, 1.0], vec![0.0, 1.0]),
+        (vec![1.0, 0.0, 0.0], vec![1.0, 0.0]),
+        (vec![1.0, 0.0, 1.0], vec![0.0, 1.0]),
+        (vec![1.0, 1.0, 0.0], vec![0.0, 1.0]),
+        (vec![1.0, 1.0, 1.0], vec![1.0, 1.0]),
+    ]
+}
+
+/// 3-bit parity: output is 1 when the number of 1s is odd.
+///
+/// This generalizes XOR from 2 inputs to 3. The decision boundary
+/// in 3D space is a plane that separates vertices of a cube by parity —
+/// no single plane can do this, so a hidden layer is essential.
+/// This problem has more local minima than 2-bit XOR.
+pub fn parity3() -> Vec<Sample> {
+    vec![
+        (vec![0.0, 0.0, 0.0], vec![0.0]),
+        (vec![0.0, 0.0, 1.0], vec![1.0]),
+        (vec![0.0, 1.0, 0.0], vec![1.0]),
+        (vec![0.0, 1.0, 1.0], vec![0.0]),
+        (vec![1.0, 0.0, 0.0], vec![1.0]),
+        (vec![1.0, 0.0, 1.0], vec![0.0]),
+        (vec![1.0, 1.0, 0.0], vec![0.0]),
+        (vec![1.0, 1.0, 1.0], vec![1.0]),
+    ]
+}
+
+// ── Function approximation ───────────────────────────────────────
+
+/// Sine wave: learn y = sin(x) for x in [0, 2π].
+///
+/// The output is normalized to [0, 1] as (sin(x) + 1) / 2 to fit the
+/// sigmoid output range. 50 evenly-spaced samples are used for training.
+///
+/// This is a **regression** (function approximation) problem — the
+/// network must learn a smooth, non-monotonic curve. Unlike boolean
+/// problems where outputs are clamped to 0 or 1, here the network
+/// must produce precise intermediate values.
+///
+/// **Why this is hard:** Sigmoid neurons are monotonic. Summing them
+/// can approximate a sine wave, but it takes more neurons and epochs
+/// than boolean logic. The network will learn the overall shape but
+/// may struggle with the peaks and troughs.
+pub fn sine() -> Vec<Sample> {
+    let n = 50;
+    let mut samples = Vec::with_capacity(n);
+    for i in 0..n {
+        let x = (i as f64 / (n - 1) as f64) * 2.0 * std::f64::consts::PI;
+        let y = (x.sin() + 1.0) / 2.0; // normalize to [0, 1]
+        samples.push((vec![x], vec![y]));
+    }
+    samples.sort_by(|a, b| a.0[0].partial_cmp(&b.0[0]).unwrap());
+    samples
+}
