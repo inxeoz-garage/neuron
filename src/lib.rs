@@ -1,10 +1,11 @@
-pub mod activation_functions;
+pub mod activation;
 pub mod data;
-pub mod eval;
+pub mod loss;
 pub mod neural;
 pub mod neural_layer;
 pub mod neural_net;
-pub mod train;
 pub mod visualize;
 
+pub use neural::Neuron;
+pub use neural_layer::Layer;
 pub use neural_net::NeuralNetwork;

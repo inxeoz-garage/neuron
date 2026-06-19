@@ -81,7 +81,7 @@ const HIDDEN: Color32 = Color32::from_rgb(20, 20, 20);
 
 fn build_graph_and_meta(net: &NeuralNetwork) -> (NetGraph, Vec<LayerMeta>) {
     let mut g = NetGraph::new(Default::default());
-    let n_inputs = net.layers[0].neurons[0].input.len();
+    let n_inputs = net.layers[0].neurons[0].weights.len();
 
     let x_input = 0.0_f32;
     let x_spacing = 300.0_f32;

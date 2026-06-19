@@ -1,11 +1,11 @@
-use neuron::{data, eval, train, NeuralNetwork};
+use neuron::{data, NeuralNetwork};
 
 fn main() {
-    let mut net = NeuralNetwork::new(&[1, 16, 1]);
+    let mut net = NeuralNetwork::new_sigmoid_mse(&[1, 16, 1]);
     let data = data::sine();
     let lr = 0.7;
 
-    let epochs = train::until_mse(&mut net, &data, lr, 0.005, Some(200_000));
+    let epochs = net.train_until(&data, lr, 0.005, Some(200_000));
     println!("\nTrained in {epochs} epochs\n");
 
     println!("Sine approximation (x → predicted, expected):");
@@ -18,5 +18,5 @@ fn main() {
         println!("  {marker} x={x:<5.2}  pred={pred:.4}  exp={exp:.4}");
     }
     println!("\nLearned parameters:");
-    eval::parameters(&net);
+    net.print_parameters();
 }
